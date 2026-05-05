@@ -1,0 +1,405 @@
+html_content = """<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador: Estados da Matéria</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;500&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #0d1117;
+            color: #c9d1d9;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Painel Lateral */
+        #sidebar {
+            width: 400px;
+            background: linear-gradient(180deg, #161b22 0%, #0d1117 100%);
+            padding: 40px 30px;
+            display: flex;
+            flex-direction: column;
+            border-right: 2px solid #30363d;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            color: #58a6ff;
+            font-size: 28px;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(88, 166, 255, 0.5);
+            line-height: 1.2;
+        }
+
+        p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+            color: #8b949e;
+        }
+
+        .highlight {
+            color: #fff;
+            font-weight: 500;
+        }
+
+        /* Botões */
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-top: auto;
+        }
+
+        button {
+            font-family: 'Orbitron', sans-serif;
+            background: transparent;
+            color: #fff;
+            border: 2px solid #58a6ff;
+            padding: 15px 20px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: rgba(88, 166, 255, 0.2);
+            transition: all 0.4s ease;
+            z-index: 0;
+        }
+
+        button:hover::before {
+            left: 0;
+        }
+
+        button:hover {
+            box-shadow: 0 0 20px rgba(88, 166, 255, 0.6);
+            transform: scale(1.02);
+        }
+
+        button.active {
+            background: #58a6ff;
+            color: #0d1117;
+            box-shadow: 0 0 25px #58a6ff;
+            font-weight: 700;
+        }
+
+        /* Botões Cores Específicas */
+        #btn-solido.active { background: #3fb950; border-color: #3fb950; box-shadow: 0 0 25px #3fb950; }
+        #btn-liquido.active { background: #58a6ff; border-color: #58a6ff; box-shadow: 0 0 25px #58a6ff; }
+        #btn-gasoso.active { background: #f85149; border-color: #f85149; box-shadow: 0 0 25px #f85149; }
+
+        /* Área Principal */
+        #main {
+            flex: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, #1f242c 0%, #0d1117 100%);
+        }
+
+        canvas {
+            border: 2px solid #30363d;
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            background: #000;
+        }
+
+        /* HUD Info */
+        #hud {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            background: rgba(22, 27, 34, 0.8);
+            padding: 15px 25px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            font-family: 'Orbitron', sans-serif;
+            text-align: right;
+            backdrop-filter: blur(5px);
+            pointer-events: none;
+        }
+
+        #state-title {
+            font-size: 24px;
+            color: #3fb950;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.3s;
+        }
+
+        #state-desc {
+            font-size: 14px;
+            color: #8b949e;
+            font-family: 'Roboto', sans-serif;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>As Moléculas e os Estados da Matéria</h1>
+        <p>A matéria é formada por partículas minúsculas, como se fossem <span class="highlight">"peças de Lego" invisíveis</span>!</p>
+        <p>O que muda entre os estados físicos é justamente o <strong>espaço e a agitação</strong> entre essas peças. Altere os estados abaixo para observar o comportamento em tempo real.</p>
+        
+        <div class="controls">
+            <button id="btn-solido" class="active" onclick="setState('solido')">Sólido</button>
+            <button id="btn-liquido" onclick="setState('liquido')">Líquido</button>
+            <button id="btn-gasoso" onclick="setState('gasoso')">Gasoso</button>
+        </div>
+    </div>
+
+    <div id="main">
+        <div id="hud">
+            <div id="state-title">Sólido</div>
+            <div id="state-desc">Peças muito unidas e organizadas. Apenas vibram.</div>
+        </div>
+        <canvas id="simCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const hudTitle = document.getElementById('state-title');
+        const hudDesc = document.getElementById('state-desc');
+
+        // Configurações Globais
+        const particles = [];
+        const numParticles = 120;
+        const radius = 8;
+        let currentState = 'solido';
+
+        // Cores
+        const colors = {
+            solido: '#3fb950', // Verde
+            liquido: '#58a6ff', // Azul
+            gasoso: '#f85149'  // Vermelho
+        };
+
+        // Alvos da grade para o estado sólido
+        const gridTargets = [];
+        const cols = 15;
+        const rows = Math.ceil(numParticles / cols);
+        const startX = (canvas.width - (cols * radius * 2.2)) / 2 + radius;
+        const startY = canvas.height - (rows * radius * 2.2) - 20;
+
+        // Inicialização
+        for (let i = 0; i < numParticles; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            const targetX = startX + col * (radius * 2.1);
+            const targetY = startY + row * (radius * 2.1);
+            gridTargets.push({ x: targetX, y: targetY });
+
+            particles.push({
+                x: targetX + (Math.random() - 0.5) * 50,
+                y: targetY + (Math.random() - 0.5) * 50,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2,
+                targetIndex: i
+            });
+        }
+
+        function setState(state) {
+            currentState = state;
+            
+            // Atualizar UI
+            document.getElementById('btn-solido').classList.remove('active');
+            document.getElementById('btn-liquido').classList.remove('active');
+            document.getElementById('btn-gasoso').classList.remove('active');
+            document.getElementById('btn-' + state).classList.add('active');
+
+            // Atualizar HUD
+            hudTitle.style.color = colors[state];
+            if (state === 'solido') {
+                hudTitle.innerText = "Sólido";
+                hudDesc.innerText = "Peças muito unidas e organizadas. Apenas vibram em suas posições.";
+            } else if (state === 'liquido') {
+                hudTitle.innerText = "Líquido";
+                hudDesc.innerText = "Peças mais soltas, escorregando umas sobre as outras. Seguem a gravidade.";
+            } else if (state === 'gasoso') {
+                hudTitle.innerText = "Gasoso";
+                hudDesc.innerText = "Peças super afastadas e agitadas, voando para todo lado!";
+                
+                // Dar um "empurrão" explosivo ao virar gás
+                particles.forEach(p => {
+                    p.vx = (Math.random() - 0.5) * 15;
+                    p.vy = (Math.random() - 0.5) * 15;
+                });
+            }
+        }
+
+        // Físicas e Colisões
+        function resolveCollisions() {
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p1 = particles[i];
+                    const p2 = particles[j];
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const minDistance = radius * 2;
+
+                    if (distance < minDistance && distance > 0) {
+                        const overlap = minDistance - distance;
+                        const nx = dx / distance;
+                        const ny = dy / distance;
+
+                        // Separar partículas
+                        const force = overlap * 0.5;
+                        p1.x += nx * force;
+                        p1.y += ny * force;
+                        p2.x -= nx * force;
+                        p2.y -= ny * force;
+
+                        // Troca simples de velocidade (bouncing)
+                        const dvx = p1.vx - p2.vx;
+                        const dvy = p1.vy - p2.vy;
+                        const dotProduct = dvx * nx + dvy * ny;
+
+                        if (dotProduct < 0) {
+                            let restitution = currentState === 'gasoso' ? 1.0 : (currentState === 'liquido' ? 0.6 : 0.2);
+                            const impulse = -(1 + restitution) * dotProduct / 2;
+                            p1.vx += impulse * nx;
+                            p1.vy += impulse * ny;
+                            p2.vx -= impulse * nx;
+                            p2.vy -= impulse * ny;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Loop de Animação
+        function animate() {
+            // Efeito de rastro (Trails)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const color = colors[currentState];
+
+            particles.forEach((p, i) => {
+                // Aplicar comportamentos baseados no estado
+                if (currentState === 'solido') {
+                    // Força da mola puxando para a posição da grade
+                    const target = gridTargets[p.targetIndex];
+                    const ax = (target.x - p.x) * 0.1;
+                    const ay = (target.y - p.y) * 0.1;
+                    p.vx += ax;
+                    p.vy += ay;
+                    
+                    // Vibração
+                    p.x += (Math.random() - 0.5) * 1.5;
+                    p.y += (Math.random() - 0.5) * 1.5;
+
+                    // Fricção (amortecimento)
+                    p.vx *= 0.8;
+                    p.vy *= 0.8;
+
+                } else if (currentState === 'liquido') {
+                    // Gravidade
+                    p.vy += 0.25;
+                    // Agitação térmica leve
+                    p.vx += (Math.random() - 0.5) * 0.5;
+                    p.vy += (Math.random() - 0.5) * 0.5;
+                    
+                    // Fricção fluida
+                    p.vx *= 0.98;
+                    p.vy *= 0.98;
+
+                } else if (currentState === 'gasoso') {
+                    // Sem gravidade, agitação térmica alta (movimento browniano)
+                    p.vx += (Math.random() - 0.5) * 1.5;
+                    p.vy += (Math.random() - 0.5) * 1.5;
+
+                    // Limite de velocidade para o gás
+                    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+                    if (speed > 8) {
+                        p.vx = (p.vx / speed) * 8;
+                        p.vy = (p.vy / speed) * 8;
+                    }
+                }
+
+                // Atualizar posição
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Colisões com as paredes (Bordas)
+                let wallRestitution = currentState === 'gasoso' ? 1.0 : 0.5;
+
+                if (p.x - radius < 0) {
+                    p.x = radius;
+                    p.vx *= -wallRestitution;
+                } else if (p.x + radius > canvas.width) {
+                    p.x = canvas.width - radius;
+                    p.vx *= -wallRestitution;
+                }
+
+                if (p.y - radius < 0) {
+                    p.y = radius;
+                    p.vy *= -wallRestitution;
+                } else if (p.y + radius > canvas.height) {
+                    p.y = canvas.height - radius;
+                    p.vy *= -wallRestitution;
+                }
+
+                // Desenhar a molécula
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                
+                // Brilho (Neon glow effect)
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+                
+                ctx.fill();
+                ctx.closePath();
+            });
+
+            // Resolver colisões entre moléculas
+            resolveCollisions();
+            // Resolver duas vezes para mais estabilidade em líquidos/sólidos densos
+            if(currentState !== 'gasoso') resolveCollisions(); 
+
+            // Limpar sombra para o próximo frame
+            ctx.shadowBlur = 0;
+
+            requestAnimationFrame(animate);
+        }
+
+        // Iniciar
+        animate();
+    </script>
+</body>
+</html>
+"""
+
+with open("simulador_estados_materia.html", "w", encoding="utf-8") as f:
+    f.write(html_content)
+
+print("File generated successfully: simulador_estados_materia.html")
