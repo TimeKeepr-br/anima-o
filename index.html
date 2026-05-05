@@ -1,4 +1,4 @@
-html_content = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
@@ -53,6 +53,16 @@ html_content = """<!DOCTYPE html>
         .highlight {
             color: #fff;
             font-weight: 500;
+        }
+
+        .mobile-tip {
+            font-size: 14px;
+            color: #e2b340;
+            background: rgba(226, 179, 64, 0.1);
+            padding: 10px;
+            border-left: 4px solid #e2b340;
+            border-radius: 4px;
+            margin-bottom: 20px;
         }
 
         /* Botões */
@@ -127,6 +137,8 @@ html_content = """<!DOCTYPE html>
             border-radius: 12px;
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
             background: #000;
+            max-width: 95%;
+            max-height: 95%;
         }
 
         /* HUD Info */
@@ -158,6 +170,16 @@ html_content = """<!DOCTYPE html>
             color: #8b949e;
             font-family: 'Roboto', sans-serif;
         }
+
+        /* Responsivo para celular */
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            #sidebar { width: 100%; height: 40%; padding: 20px; overflow-y: auto; border-right: none; border-bottom: 2px solid #30363d; }
+            #main { height: 60%; }
+            #hud { top: 10px; right: 10px; padding: 10px; }
+            #state-title { font-size: 18px; }
+            #state-desc { font-size: 12px; }
+        }
     </style>
 </head>
 <body>
@@ -165,7 +187,11 @@ html_content = """<!DOCTYPE html>
     <div id="sidebar">
         <h1>As Moléculas e os Estados da Matéria</h1>
         <p>A matéria é formada por partículas minúsculas, como se fossem <span class="highlight">"peças de Lego" invisíveis</span>!</p>
-        <p>O que muda entre os estados físicos é justamente o <strong>espaço e a agitação</strong> entre essas peças. Altere os estados abaixo para observar o comportamento em tempo real.</p>
+        <p>O que muda entre os estados físicos é o espaço e a agitação.</p>
+        
+        <div class="mobile-tip">
+            📱 <strong>Dica Mobile:</strong> No estado Líquido, gire ou incline o seu celular para ver a matéria escorrer usando o acelerômetro!
+        </div>
         
         <div class="controls">
             <button id="btn-solido" class="active" onclick="setState('solido')">Sólido</button>
@@ -177,7 +203,7 @@ html_content = """<!DOCTYPE html>
     <div id="main">
         <div id="hud">
             <div id="state-title">Sólido</div>
-            <div id="state-desc">Peças muito unidas e organizadas. Apenas vibram.</div>
+            <div id="state-desc">Unidas e organizadas. Apenas vibram.</div>
         </div>
         <canvas id="simCanvas" width="800" height="600"></canvas>
     </div>
@@ -188,65 +214,123 @@ html_content = """<!DOCTYPE html>
         const hudTitle = document.getElementById('state-title');
         const hudDesc = document.getElementById('state-desc');
 
+        // Ajustar tamanho do canvas em telas menores
+        function resizeCanvas() {
+            if(window.innerWidth < 768) {
+                canvas.width = window.innerWidth * 0.9;
+                canvas.height = window.innerHeight * 0.5;
+            } else {
+                canvas.width = 800;
+                canvas.height = 600;
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
         // Configurações Globais
         const particles = [];
         const numParticles = 120;
         const radius = 8;
         let currentState = 'solido';
 
+        // Gravidade do Acelerômetro
+        let tiltX = 0;
+        let tiltY = 0.25; // Gravidade padrão para baixo
+
         // Cores
         const colors = {
-            solido: '#3fb950', // Verde
-            liquido: '#58a6ff', // Azul
-            gasoso: '#f85149'  // Vermelho
+            solido: '#3fb950',
+            liquido: '#58a6ff',
+            gasoso: '#f85149'
         };
 
-        // Alvos da grade para o estado sólido
         const gridTargets = [];
         const cols = 15;
         const rows = Math.ceil(numParticles / cols);
-        const startX = (canvas.width - (cols * radius * 2.2)) / 2 + radius;
-        const startY = canvas.height - (rows * radius * 2.2) - 20;
+        
+        function initGrid() {
+            const startX = (canvas.width - (cols * radius * 2.2)) / 2 + radius;
+            const startY = canvas.height - (rows * radius * 2.2) - 20;
+            
+            for (let i = 0; i < numParticles; i++) {
+                const col = i % cols;
+                const row = Math.floor(i / cols);
+                const targetX = startX + col * (radius * 2.1);
+                const targetY = startY + row * (radius * 2.1);
+                
+                if(!gridTargets[i]) {
+                    gridTargets.push({ x: targetX, y: targetY });
+                    particles.push({
+                        x: targetX + (Math.random() - 0.5) * 50,
+                        y: targetY + (Math.random() - 0.5) * 50,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: (Math.random() - 0.5) * 2,
+                        targetIndex: i
+                    });
+                } else {
+                    gridTargets[i] = { x: targetX, y: targetY };
+                }
+            }
+        }
+        initGrid();
 
-        // Inicialização
-        for (let i = 0; i < numParticles; i++) {
-            const col = i % cols;
-            const row = Math.floor(i / cols);
-            const targetX = startX + col * (radius * 2.1);
-            const targetY = startY + row * (radius * 2.1);
-            gridTargets.push({ x: targetX, y: targetY });
+        // Capturar dados do Acelerômetro
+        function handleOrientation(event) {
+            let x = event.gamma; // Inclinação Esquerda/Direita [-90,90]
+            let y = event.beta;  // Inclinação Frente/Trás [-180,180]
 
-            particles.push({
-                x: targetX + (Math.random() - 0.5) * 50,
-                y: targetY + (Math.random() - 0.5) * 50,
-                vx: (Math.random() - 0.5) * 2,
-                vy: (Math.random() - 0.5) * 2,
-                targetIndex: i
-            });
+            // Limitar valores para evitar gravidade extrema
+            if (x > 90) x = 90;
+            if (x < -90) x = -90;
+            if (y > 90) y = 90;
+            if (y < -90) y = -90;
+
+            // Converter para força de gravidade (-0.4 a 0.4)
+            tiltX = (x / 90) * 0.4;
+            tiltY = (y / 90) * 0.4;
+        }
+
+        // Solicitar permissão do Acelerômetro (Necessário para iOS)
+        function requestAccelPermission() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                // Android e navegadores antigos não precisam de permissão explícita
+                window.addEventListener('deviceorientation', handleOrientation);
+            }
         }
 
         function setState(state) {
             currentState = state;
             
-            // Atualizar UI
             document.getElementById('btn-solido').classList.remove('active');
             document.getElementById('btn-liquido').classList.remove('active');
             document.getElementById('btn-gasoso').classList.remove('active');
             document.getElementById('btn-' + state).classList.add('active');
 
-            // Atualizar HUD
             hudTitle.style.color = colors[state];
             if (state === 'solido') {
                 hudTitle.innerText = "Sólido";
-                hudDesc.innerText = "Peças muito unidas e organizadas. Apenas vibram em suas posições.";
+                hudDesc.innerText = "Organizadas. Apenas vibram.";
+                // Reseta a grade caso a tela tenha mudado de tamanho
+                initGrid(); 
             } else if (state === 'liquido') {
                 hudTitle.innerText = "Líquido";
-                hudDesc.innerText = "Peças mais soltas, escorregando umas sobre as outras. Seguem a gravidade.";
+                hudDesc.innerText = "Mais soltas, escorregam com a gravidade.";
+                
+                // Ativa o acelerômetro quando clicar em Liquido!
+                requestAccelPermission();
+                
             } else if (state === 'gasoso') {
                 hudTitle.innerText = "Gasoso";
-                hudDesc.innerText = "Peças super afastadas e agitadas, voando para todo lado!";
+                hudDesc.innerText = "Afastadas e muito agitadas!";
                 
-                // Dar um "empurrão" explosivo ao virar gás
                 particles.forEach(p => {
                     p.vx = (Math.random() - 0.5) * 15;
                     p.vy = (Math.random() - 0.5) * 15;
@@ -270,14 +354,12 @@ html_content = """<!DOCTYPE html>
                         const nx = dx / distance;
                         const ny = dy / distance;
 
-                        // Separar partículas
                         const force = overlap * 0.5;
                         p1.x += nx * force;
                         p1.y += ny * force;
                         p2.x -= nx * force;
                         p2.y -= ny * force;
 
-                        // Troca simples de velocidade (bouncing)
                         const dvx = p1.vx - p2.vx;
                         const dvy = p1.vy - p2.vy;
                         const dotProduct = dvx * nx + dvy * ny;
@@ -297,47 +379,40 @@ html_content = """<!DOCTYPE html>
 
         // Loop de Animação
         function animate() {
-            // Efeito de rastro (Trails)
             ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
             const color = colors[currentState];
 
             particles.forEach((p, i) => {
-                // Aplicar comportamentos baseados no estado
                 if (currentState === 'solido') {
-                    // Força da mola puxando para a posição da grade
                     const target = gridTargets[p.targetIndex];
                     const ax = (target.x - p.x) * 0.1;
                     const ay = (target.y - p.y) * 0.1;
                     p.vx += ax;
                     p.vy += ay;
                     
-                    // Vibração
                     p.x += (Math.random() - 0.5) * 1.5;
                     p.y += (Math.random() - 0.5) * 1.5;
 
-                    // Fricção (amortecimento)
                     p.vx *= 0.8;
                     p.vy *= 0.8;
 
                 } else if (currentState === 'liquido') {
-                    // Gravidade
-                    p.vy += 0.25;
-                    // Agitação térmica leve
+                    // AQUI A MÁGICA ACONTECE: Usa tiltX e tiltY do Acelerômetro
+                    p.vx += tiltX;
+                    p.vy += tiltY;
+                    
                     p.vx += (Math.random() - 0.5) * 0.5;
                     p.vy += (Math.random() - 0.5) * 0.5;
                     
-                    // Fricção fluida
                     p.vx *= 0.98;
                     p.vy *= 0.98;
 
                 } else if (currentState === 'gasoso') {
-                    // Sem gravidade, agitação térmica alta (movimento browniano)
                     p.vx += (Math.random() - 0.5) * 1.5;
                     p.vy += (Math.random() - 0.5) * 1.5;
 
-                    // Limite de velocidade para o gás
                     const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
                     if (speed > 8) {
                         p.vx = (p.vx / speed) * 8;
@@ -345,11 +420,9 @@ html_content = """<!DOCTYPE html>
                     }
                 }
 
-                // Atualizar posição
                 p.x += p.vx;
                 p.y += p.vy;
 
-                // Colisões com as paredes (Bordas)
                 let wallRestitution = currentState === 'gasoso' ? 1.0 : 0.5;
 
                 if (p.x - radius < 0) {
@@ -368,12 +441,10 @@ html_content = """<!DOCTYPE html>
                     p.vy *= -wallRestitution;
                 }
 
-                // Desenhar a molécula
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
                 ctx.fillStyle = color;
                 
-                // Brilho (Neon glow effect)
                 ctx.shadowBlur = 10;
                 ctx.shadowColor = color;
                 
@@ -381,25 +452,14 @@ html_content = """<!DOCTYPE html>
                 ctx.closePath();
             });
 
-            // Resolver colisões entre moléculas
             resolveCollisions();
-            // Resolver duas vezes para mais estabilidade em líquidos/sólidos densos
             if(currentState !== 'gasoso') resolveCollisions(); 
 
-            // Limpar sombra para o próximo frame
             ctx.shadowBlur = 0;
-
             requestAnimationFrame(animate);
         }
 
-        // Iniciar
         animate();
     </script>
 </body>
 </html>
-"""
-
-with open("simulador_estados_materia.html", "w", encoding="utf-8") as f:
-    f.write(html_content)
-
-print("File generated successfully: simulador_estados_materia.html")
